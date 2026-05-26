@@ -1,7 +1,6 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 
-// Helpers — poll until a condition is true or timeout
 async function waitFor(condition: () => boolean, timeoutMs = 3000, intervalMs = 100): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -15,17 +14,31 @@ function isMaximized(): boolean {
   return vscode.workspace.getConfiguration('workbench').get('activityBar.location') === 'hidden';
 }
 
+// Every workbench command the extension calls — verified against the live registry.
+const REQUIRED_COMMANDS = [
+  'workbench.action.closeSidebar',
+  'workbench.action.closePanel',
+  'workbench.action.closeAuxiliaryBar',
+  'workbench.action.activityBarLocation.hide',
+  'workbench.action.activityBarLocation.default',
+  'workbench.action.focusSideBar',
+  'workbench.action.togglePanel',
+  'workbench.action.toggleAuxiliaryBar',
+  'workbench.action.focusActiveEditorGroup',
+];
+
 suite('Max Editor Extension', () => {
 
+  let allCommands: string[] = [];
+
   suiteSetup(async () => {
-    // Ensure extension is activated
     const ext = vscode.extensions.getExtension('cgaspard.maxeditor');
     assert.ok(ext, 'Extension cgaspard.maxeditor should be installed');
     await ext!.activate();
+    allCommands = await vscode.commands.getCommands(true);
   });
 
   setup(async () => {
-    // Always start each test in restored (non-maximized) state
     if (isMaximized()) {
       await vscode.commands.executeCommand('maxeditor.toggleMaximize');
       await waitFor(() => !isMaximized());
@@ -33,27 +46,36 @@ suite('Max Editor Extension', () => {
   });
 
   teardown(async () => {
-    // Clean up — restore panels after every test
     if (isMaximized()) {
       await vscode.commands.executeCommand('maxeditor.toggleMaximize');
       await waitFor(() => !isMaximized());
     }
   });
 
-  test('Extension activates and registers command', async () => {
-    const commands = await vscode.commands.getCommands(true);
+  // --- Command registry validation ---
+
+  test('Extension registers toggleMaximize command', async () => {
     assert.ok(
-      commands.includes('maxeditor.toggleMaximize'),
-      'maxeditor.toggleMaximize command should be registered'
+      allCommands.includes('maxeditor.toggleMaximize'),
+      'maxeditor.toggleMaximize should be registered'
     );
   });
 
+  for (const cmd of REQUIRED_COMMANDS) {
+    test(`Workbench command exists: ${cmd}`, () => {
+      assert.ok(
+        allCommands.includes(cmd),
+        `Command '${cmd}' not found in VS Code registry — extension will error when called`
+      );
+    });
+  }
+
+  // --- Behaviour tests ---
+
   test('Maximize hides the activity bar', async () => {
     assert.ok(!isMaximized(), 'Should start in normal state');
-
     await vscode.commands.executeCommand('maxeditor.toggleMaximize');
     await waitFor(isMaximized);
-
     const location = vscode.workspace.getConfiguration('workbench').get('activityBar.location');
     assert.strictEqual(location, 'hidden', 'Activity bar should be hidden after maximize');
   });
@@ -61,36 +83,28 @@ suite('Max Editor Extension', () => {
   test('Restore brings activity bar back', async () => {
     await vscode.commands.executeCommand('maxeditor.toggleMaximize');
     await waitFor(isMaximized);
-
     await vscode.commands.executeCommand('maxeditor.toggleMaximize');
     await waitFor(() => !isMaximized());
-
     const location = vscode.workspace.getConfiguration('workbench').get('activityBar.location');
-    assert.notStrictEqual(location, 'hidden', 'Activity bar should not be hidden after restore');
+    assert.notStrictEqual(location, 'hidden', 'Activity bar should be visible after restore');
   });
 
-  test('Toggle is idempotent — maximize twice stays maximized', async () => {
+  test('Three toggles ends maximized', async () => {
     await vscode.commands.executeCommand('maxeditor.toggleMaximize');
     await waitFor(isMaximized);
-
-    // Second toggle should restore
     await vscode.commands.executeCommand('maxeditor.toggleMaximize');
     await waitFor(() => !isMaximized());
-
-    // Third toggle should maximize again
     await vscode.commands.executeCommand('maxeditor.toggleMaximize');
     await waitFor(isMaximized);
-
-    assert.ok(isMaximized(), 'Should be maximized after odd number of toggles');
+    assert.ok(isMaximized(), 'Should be maximized after three toggles');
   });
 
-  test('No commands throw errors when invoked', async () => {
+  test('Maximize and restore do not throw', async () => {
     await assert.doesNotReject(
       () => Promise.resolve(vscode.commands.executeCommand('maxeditor.toggleMaximize')),
       'maximize should not throw'
     );
     await waitFor(isMaximized);
-
     await assert.doesNotReject(
       () => Promise.resolve(vscode.commands.executeCommand('maxeditor.toggleMaximize')),
       'restore should not throw'
