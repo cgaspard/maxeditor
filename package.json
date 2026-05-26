@@ -1,0 +1,73 @@
+{
+  "name": "maxeditor",
+  "displayName": "Max Editor",
+  "description": "Maximize the editor by hiding all side panels, then restore them with one click.",
+  "version": "0.1.0",
+  "publisher": "cgaspard",
+  "license": "MIT",
+  "icon": "media/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cgaspard/maxeditor.git"
+  },
+  "bugs": {
+    "url": "https://github.com/cgaspard/maxeditor/issues"
+  },
+  "homepage": "https://github.com/cgaspard/maxeditor#readme",
+  "engines": {
+    "vscode": "^1.104.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "maximize",
+    "editor",
+    "zen",
+    "focus",
+    "panels"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "maxeditor.toggleMaximize",
+        "title": "Max Editor: Toggle Maximize Editor",
+        "icon": "$(screen-full)"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "maxeditor.toggleMaximize",
+        "key": "ctrl+shift+m",
+        "mac": "cmd+shift+m"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "maxeditor.toggleMaximize",
+          "group": "navigation"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run package",
+    "compile": "npm run check-types && node esbuild.js",
+    "check-types": "tsc --noEmit",
+    "watch": "node esbuild.js --watch",
+    "package": "npm run check-types && node esbuild.js --production",
+    "package:vsix": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.104.0",
+    "@vscode/vsce": "^3.7.1",
+    "esbuild": "^0.20.0",
+    "typescript": "^5.3.0"
+  }
+}

@@ -1,0 +1,94 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Resolve version
+        id: version
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          version="${tag#v}"
+          pkg_version=$(node -p "require('./package.json').version")
+
+          if [ "$version" != "$pkg_version" ]; then
+            echo "::error::Tag version ($version) does not match package.json version ($pkg_version)."
+            echo "::error::Bump package.json before tagging, or retag to match."
+            exit 1
+          fi
+
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Verify release notes exist
+        id: notes
+        run: |
+          notes_file="release-notes/${{ steps.version.outputs.version }}.md"
+          if [ ! -f "$notes_file" ]; then
+            echo "::error::Missing release notes file: $notes_file"
+            echo "::error::Create it (see release-notes/README.md) and retag."
+            exit 1
+          fi
+          echo "file=$notes_file" >> "$GITHUB_OUTPUT"
+
+      - name: Build .vsix
+        run: npm run package:vsix
+
+      - name: Locate .vsix
+        id: vsix
+        run: |
+          vsix=$(ls -1 *.vsix | head -n1)
+          if [ -z "$vsix" ]; then
+            echo "::error::No .vsix produced by 'npm run package:vsix'."
+            exit 1
+          fi
+          echo "path=$vsix" >> "$GITHUB_OUTPUT"
+          echo "Built: $vsix"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ steps.version.outputs.tag }}" \
+            "${{ steps.vsix.outputs.path }}" \
+            --title "${{ steps.version.outputs.tag }}" \
+            --notes-file "${{ steps.notes.outputs.file }}"
+
+      # Publish the exact .vsix that was just attached to the GitHub Release
+      # to the VS Code Marketplace, so the two artifacts are byte-identical.
+      # Skipped for pre-release tags (e.g. v0.3.0-rc.1) — those shouldn't
+      # ship to end users. Fails loudly if VSCE_PAT isn't configured rather
+      # than silently skipping.
+      - name: Publish to VS Code Marketplace
+        if: ${{ !contains(steps.version.outputs.version, '-') }}
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: |
+          if [ -z "$VSCE_PAT" ]; then
+            echo "::error::VSCE_PAT secret is not set. Skipping marketplace publish."
+            echo "::error::Add a Personal Access Token (Marketplace > Manage scope) at Settings > Secrets and variables > Actions > VSCE_PAT."
+            exit 1
+          fi
+          npx vsce publish --packagePath "${{ steps.vsix.outputs.path }}"
