@@ -1,6 +1,6 @@
 # Max Editor for VS Code
 
-![Max Editor](media/icon.png)
+<img src="media/icon.png" alt="Max Editor" width="96" />
 
 Maximize the editor by hiding all VS Code side panels with a single click (or keyboard shortcut), then restore everything exactly as it was.
 
