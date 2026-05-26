@@ -4,6 +4,7 @@ src/**
 scripts/**
 release-notes/**
 node_modules/**
+dist/test/**
 *.vsix
 *.map
 tsconfig.json

@@ -52,7 +52,7 @@ async function restore(): Promise<void> {
   }
 
   if (savedState.panel) {
-    await vscode.commands.executeCommand('workbench.action.showPanel');
+    await vscode.commands.executeCommand('workbench.action.panel.show');
     await vscode.commands.executeCommand('workbench.action.focusActiveEditorGroup');
   }
 
