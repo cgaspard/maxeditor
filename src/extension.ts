@@ -5,7 +5,6 @@ type PanelState = {
   panel: boolean;        // bottom panel (terminal, output, etc.)
   activityBar: boolean;
   secondarySideBar: boolean;
-  statusBar: boolean;
 };
 
 let maximized = false;
@@ -23,7 +22,6 @@ async function getPanelVisibility(): Promise<PanelState> {
     panel: true,
     activityBar: true,
     secondarySideBar: false,
-    statusBar: true,
   };
 }
 
@@ -37,7 +35,6 @@ async function maximize(): Promise<void> {
   await vscode.commands.executeCommand('workbench.action.closePanel');
   await vscode.commands.executeCommand('workbench.action.closeAuxiliaryBar');
   await vscode.commands.executeCommand('workbench.action.activityBarLocation.hide');
-  await vscode.commands.executeCommand('workbench.action.statusBar.hide');
 
   maximized = true;
   updateStatusBar();
@@ -65,8 +62,6 @@ async function restore(): Promise<void> {
 
   // Activity bar: restore to default (side) position
   await vscode.commands.executeCommand('workbench.action.activityBarLocation.default');
-
-  await vscode.commands.executeCommand('workbench.action.statusBar.show');
 
   maximized = false;
   updateStatusBar();
