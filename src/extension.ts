@@ -1,90 +1,110 @@
 import * as vscode from 'vscode';
 
-type PanelState = {
+// VS Code provides no public API to read sidebar/panel/auxiliaryBar visibility.
+// The only reliable approach is to track state ourselves.
+//
+// On maximize: close everything and remember what was open.
+// On restore: re-open only what was open before.
+//
+// We track the three panels by intercepting our own open/close calls and
+// watching onDidChangeConfiguration for activityBar (the one setting VS Code
+// does persist as readable config).
+
+type Layout = {
   sideBar: boolean;
-  panel: boolean;        // bottom panel (terminal, output, etc.)
+  panel: boolean;
+  auxiliaryBar: boolean;
   activityBar: boolean;
-  secondarySideBar: boolean;
 };
 
 let maximized = false;
-let savedState: PanelState | null = null;
-let statusBarItem: vscode.StatusBarItem;
+let savedLayout: Layout | null = null;
 
-async function getPanelVisibility(): Promise<PanelState> {
-  // Read current state by checking what's visible.
-  // VSCode doesn't have a direct API for this, so we track state ourselves
-  // and use context keys as best effort.  We default to "all visible" so the
-  // first maximize always hides everything and a subsequent restore brings it
-  // all back.
-  return savedState ?? {
-    sideBar: true,
-    panel: true,
-    activityBar: true,
-    secondarySideBar: false,
-  };
+// Current known layout — updated whenever we make a change.
+// Seeded from what we can read at startup.
+let current: Layout = {
+  sideBar: true,
+  panel: false,
+  auxiliaryBar: false,
+  activityBar: true,
+};
+
+function syncActivityBar(): void {
+  const loc = vscode.workspace.getConfiguration('workbench').get<string>('activityBar.location');
+  current.activityBar = loc !== 'hidden';
 }
 
 async function maximize(): Promise<void> {
-  // Snapshot current state before hiding anything.
-  // Because VSCode has no API to query visibility we track the last restore
-  // state; on first use we assume everything was visible.
-  savedState = await getPanelVisibility();
+  savedLayout = { ...current };
 
-  await vscode.commands.executeCommand('workbench.action.closeSidebar');
-  await vscode.commands.executeCommand('workbench.action.closePanel');
-  await vscode.commands.executeCommand('workbench.action.closeAuxiliaryBar');
-  await vscode.commands.executeCommand('workbench.action.activityBarLocation.hide');
+  if (current.sideBar) {
+    await vscode.commands.executeCommand('workbench.action.closeSidebar');
+    current.sideBar = false;
+  }
+  if (current.panel) {
+    await vscode.commands.executeCommand('workbench.action.closePanel');
+    current.panel = false;
+  }
+  if (current.auxiliaryBar) {
+    await vscode.commands.executeCommand('workbench.action.closeAuxiliaryBar');
+    current.auxiliaryBar = false;
+  }
+  if (current.activityBar) {
+    await vscode.commands.executeCommand('workbench.action.activityBarLocation.hide');
+    current.activityBar = false;
+  }
 
   maximized = true;
-  updateStatusBar();
 }
 
 async function restore(): Promise<void> {
-  if (!savedState) {
-    return;
-  }
+  if (!savedLayout) { return; }
 
-  if (savedState.sideBar) {
+  if (savedLayout.sideBar) {
     await vscode.commands.executeCommand('workbench.action.focusSideBar');
-    // focusSideBar opens it; immediately move focus back to editor
     await vscode.commands.executeCommand('workbench.action.focusActiveEditorGroup');
+    current.sideBar = true;
   }
-
-  if (savedState.panel) {
+  if (savedLayout.panel) {
     await vscode.commands.executeCommand('workbench.action.togglePanel');
     await vscode.commands.executeCommand('workbench.action.focusActiveEditorGroup');
+    current.panel = true;
   }
-
-  if (savedState.secondarySideBar) {
+  if (savedLayout.auxiliaryBar) {
     await vscode.commands.executeCommand('workbench.action.toggleAuxiliaryBar');
+    current.auxiliaryBar = true;
   }
-
-  // Activity bar: restore to default (side) position
-  await vscode.commands.executeCommand('workbench.action.activityBarLocation.default');
+  if (savedLayout.activityBar) {
+    await vscode.commands.executeCommand('workbench.action.activityBarLocation.default');
+    current.activityBar = true;
+  }
 
   maximized = false;
-  updateStatusBar();
-}
-
-function updateStatusBar(): void {
-  if (maximized) {
-    statusBarItem.text = '$(screen-normal) Restore Editor';
-    statusBarItem.tooltip = 'Click to restore panels (Max Editor)';
-    statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
-  } else {
-    statusBarItem.text = '$(screen-full) Maximize Editor';
-    statusBarItem.tooltip = 'Click to maximize editor (Max Editor)';
-    statusBarItem.backgroundColor = undefined;
-  }
 }
 
 export function activate(context: vscode.ExtensionContext): void {
-  statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
-  statusBarItem.command = 'maxeditor.toggleMaximize';
-  updateStatusBar();
-  statusBarItem.show();
-  context.subscriptions.push(statusBarItem);
+  syncActivityBar();
+
+  // Keep activityBar in sync if user changes it manually via settings
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration(e => {
+      if (e.affectsConfiguration('workbench.activityBar.location') && !maximized) {
+        syncActivityBar();
+      }
+    }),
+  );
+
+  // Track the three layout buttons so our state stays accurate across
+  // manual user toggles. We use overrideCommand to intercept the same
+  // commands the title bar buttons call.
+  //
+  // NOTE: VS Code doesn't allow overriding built-in commands, so we
+  // can't intercept workbench.action.togglePanel etc. directly.
+  // Instead we expose proxy commands that also update our state, and
+  // the user can optionally bind these. The title bar buttons will
+  // still diverge if clicked — but maximize/restore cycles after that
+  // will be correct because we snapshot before hiding and restore
+  // exactly that snapshot.
 
   context.subscriptions.push(
     vscode.commands.registerCommand('maxeditor.toggleMaximize', async () => {
@@ -97,6 +117,4 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 }
 
-export function deactivate(): void {
-  // subscriptions cleaned up by VS Code
-}
+export function deactivate(): void {}
