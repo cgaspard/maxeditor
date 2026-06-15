@@ -62,6 +62,7 @@
     "check-types": "tsc --noEmit",
     "watch": "node esbuild.js --watch",
     "test": "npm run compile:test && node dist/test/runTests.js",
+    "test:unit": "npm run compile:test && node -e \"const m=new(require('mocha'))({ui:'tdd',color:true});m.addFile('./dist/test/suite/sqlite-reader.test.js');m.run(f=>process.exit(f>0?1:0));\"",
     "package": "npm run check-types && node esbuild.js --production",
     "package:vsix": "vsce package"
   },

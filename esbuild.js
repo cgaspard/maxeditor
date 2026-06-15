@@ -27,6 +27,7 @@ async function main() {
           'src/test/runTests.ts',
           'src/test/suite/index.ts',
           'src/test/suite/extension.test.ts',
+          'src/test/suite/sqlite-reader.test.ts',
         ],
         bundle: true,
         format: 'cjs',
