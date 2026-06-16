@@ -2,7 +2,7 @@
   "name": "maxeditor",
   "displayName": "Max Editor",
   "description": "Maximize the editor by hiding all side panels, then restore them with one click.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "cgaspard",
   "license": "MIT",
   "icon": "media/icon.png",
