@@ -1,6 +1,6 @@
 {
   "name": "max-editor",
-  "displayName": "Max Editor",
+  "displayName": "MaxEditor",
   "description": "Maximize the editor by hiding all side panels, then restore them with one click.",
   "version": "0.1.1",
   "publisher": "cgaspard",
